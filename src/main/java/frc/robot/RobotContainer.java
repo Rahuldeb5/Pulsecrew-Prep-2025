@@ -5,13 +5,22 @@
 package frc.robot;
 
 import frc.robot.Constants.OperatorConstants;
-import frc.robot.commands.Autos;
-import frc.robot.commands.ExampleCommand;
-import frc.robot.subsystems.ExampleSubsystem;
 import frc.robot.subsystems.SwerveDrive;
+
+import java.util.List;
+
 import edu.wpi.first.math.MathUtil;
+import edu.wpi.first.math.controller.PIDController;
+import edu.wpi.first.math.controller.ProfiledPIDController;
+import edu.wpi.first.math.geometry.Pose2d;
+import edu.wpi.first.math.geometry.Rotation2d;
+import edu.wpi.first.math.geometry.Translation2d;
+import edu.wpi.first.math.trajectory.Trajectory;
+import edu.wpi.first.math.trajectory.TrajectoryConfig;
+import edu.wpi.first.math.trajectory.TrajectoryGenerator;
 import edu.wpi.first.wpilibj2.command.Command;
 import edu.wpi.first.wpilibj2.command.RunCommand;
+import edu.wpi.first.wpilibj2.command.SwerveControllerCommand;
 import edu.wpi.first.wpilibj2.command.button.CommandXboxController;
 import edu.wpi.first.wpilibj2.command.button.Trigger;
 
@@ -67,6 +76,34 @@ public class RobotContainer {
    * @return the command to run in autonomous
    */
   public Command getAutonomousCommand() {
-    return null;
+    TrajectoryConfig trajectoryConfig =
+      new TrajectoryConfig(Constants.Auton.MAX_LINEAR_SPEED, Constants.Auton.MAX_LINEAR_ACCELERATION_SQUARED)
+        .setKinematics(Constants.Swerve.driveKinematics);
+
+    Trajectory mobilityAuton = TrajectoryGenerator.generateTrajectory(
+      new Pose2d(0, 0, new Rotation2d(0)),
+      List.of(new Translation2d(0, -5), new Translation2d(0, 5)),
+      new Pose2d(0, 0, new Rotation2d(0)),
+      trajectoryConfig);
+    
+    ProfiledPIDController thetaController = new ProfiledPIDController(
+      Constants.Auton.kPTheta, 0, 0,
+      Constants.Auton.thetaControllerConstraints);
+    thetaController.enableContinuousInput(-Math.PI,Math.PI);
+
+    SwerveControllerCommand swerveControllerCommand = new SwerveControllerCommand(
+      mobilityAuton,
+      robotDrive::getPose, 
+      Constants.Swerve.driveKinematics,
+      
+      new PIDController(Constants.Auton.kPX, 0, 0),
+      new PIDController(Constants.Auton.kPY, 0, 0),
+      thetaController,
+      robotDrive::setModuleStates,
+      robotDrive);
+
+    robotDrive.resetOdometry(mobilityAuton.getInitialPose());
+
+    return swerveControllerCommand.andThen(() -> robotDrive.drive(0, 0, 0, false));
   }
 }

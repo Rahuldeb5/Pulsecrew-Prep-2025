@@ -1,9 +1,6 @@
 package frc.robot.subsystems;
 
-import com.ctre.phoenix6.configs.Slot0Configs;
-import com.ctre.phoenix6.configs.TalonFXConfiguration;
 import com.ctre.phoenix6.hardware.TalonFX;
-import com.ctre.phoenix6.signals.NeutralModeValue;
 import com.revrobotics.AbsoluteEncoder;
 import com.revrobotics.spark.SparkClosedLoopController;
 import com.revrobotics.spark.SparkMax;
@@ -11,15 +8,12 @@ import com.revrobotics.spark.SparkBase.ControlType;
 import com.revrobotics.spark.SparkBase.PersistMode;
 import com.revrobotics.spark.SparkBase.ResetMode;
 import com.revrobotics.spark.SparkLowLevel.MotorType;
-import com.revrobotics.spark.config.SparkMaxConfig;
-import com.revrobotics.spark.config.ClosedLoopConfig.FeedbackSensor;
-import com.revrobotics.spark.config.SparkBaseConfig.IdleMode;
 
 import edu.wpi.first.math.geometry.Rotation2d;
 import edu.wpi.first.math.kinematics.SwerveModulePosition;
 import edu.wpi.first.math.kinematics.SwerveModuleState;
 import frc.robot.Constants;
-
+import frc.robot.Configs;
 
 public class SwerveModule {
     private final TalonFX driveMotor;
@@ -27,11 +21,7 @@ public class SwerveModule {
 
     private final AbsoluteEncoder turnEncoder;
     private final SparkClosedLoopController turnController;
-    private final SparkMaxConfig turnConfig;
 
-    private final TalonFXConfiguration driveConfig;
-
-    private SwerveModuleState desiredState;
     private double angleOffset;
 
     public SwerveModule(int driveId, int turnId, double angleOffset) {
@@ -41,35 +31,10 @@ public class SwerveModule {
         turnEncoder = turnMotor.getAbsoluteEncoder();
         turnController = turnMotor.getClosedLoopController();
 
-        driveConfig = new TalonFXConfiguration();
-        driveConfig.MotorOutput.NeutralMode = NeutralModeValue.Brake;
-        driveConfig.Slot0 = new Slot0Configs().withKP(Constants.Swerve.Drive.kP).withKI(Constants.Swerve.Drive.kI).withKD(Constants.Swerve.Drive.kD);
-        driveConfig.Feedback.SensorToMechanismRatio = Constants.Swerve.GEAR_RATIO;
-        driveConfig.TorqueCurrent.PeakForwardTorqueCurrent = Constants.Swerve.driveCurrentLimitAmps;
-        driveConfig.TorqueCurrent.PeakReverseTorqueCurrent = -Constants.Swerve.driveCurrentLimitAmps;
-        driveConfig.CurrentLimits.StatorCurrentLimit = Constants.Swerve.driveCurrentLimitAmps;
-        driveConfig.CurrentLimits.StatorCurrentLimitEnable = true;
-        driveConfig.ClosedLoopRamps.DutyCycleClosedLoopRampPeriod = 0.02;
-        driveMotor.getConfigurator().apply(driveConfig);
+        driveMotor.getConfigurator().apply(Configs.KrakenSwerveModule.driveConfig);
 
-        turnConfig = new SparkMaxConfig();
-        turnConfig
-            .idleMode(IdleMode.kBrake)
-            .smartCurrentLimit((int)Constants.Swerve.driveCurrentLimitAmps);
-        turnConfig.absoluteEncoder
-            .inverted(true)
-            .positionConversionFactor(Constants.Swerve.TURN_FACTOR)
-            .velocityConversionFactor(Constants.Swerve.TURN_FACTOR / 60.0);
-        turnConfig.closedLoop
-            .feedbackSensor(FeedbackSensor.kAbsoluteEncoder)
-            .pid(Constants.Swerve.Turn.kP, Constants.Swerve.Turn.kI, Constants.Swerve.Turn.kD)
-            .outputRange(-1,1)
-            .positionWrappingEnabled(true)
-            .positionWrappingInputRange(0,Constants.Swerve.TURN_FACTOR);
+        turnMotor.configure(Configs.MAXSwerveModule.turnConfig, ResetMode.kResetSafeParameters, PersistMode.kPersistParameters);
 
-        turnMotor.configure(turnConfig, ResetMode.kResetSafeParameters, PersistMode.kPersistParameters);
-
-        desiredState = new SwerveModuleState(0.0, new Rotation2d(turnEncoder.getPosition()));
         this.angleOffset = angleOffset;
     }
 
@@ -88,10 +53,8 @@ public class SwerveModule {
 
         correctedDesiredState.optimize(new Rotation2d(turnEncoder.getPosition()));
 
-        driveMotor.set(correctedDesiredState.speedMetersPerSecond / Constants.Swerve.MAX_RPM);
+        driveMotor.set(correctedDesiredState.speedMetersPerSecond / Constants.Swerve.MAX_LINEAR_SPEED);
         turnController.setReference(correctedDesiredState.angle.getRadians(), ControlType.kPosition);
-        
-        this.desiredState = desiredState;
     }
 
 }

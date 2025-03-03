@@ -2,7 +2,6 @@ package frc.robot.subsystems;
 
 import edu.wpi.first.math.geometry.Pose2d;
 import edu.wpi.first.math.geometry.Rotation2d;
-import edu.wpi.first.math.geometry.Translation2d;
 import edu.wpi.first.math.kinematics.ChassisSpeeds;
 import edu.wpi.first.math.kinematics.SwerveDriveKinematics;
 import edu.wpi.first.math.kinematics.SwerveDriveOdometry;
@@ -18,8 +17,14 @@ public class SwerveDrive extends SubsystemBase {
 
     private final ADIS16470_IMU gyro;
 
-    private SwerveDriveKinematics driveKinematics;
     private SwerveDriveOdometry odometry;
+
+    /***
+     * Options for swerve modules:
+     * Kraken (drive) + MAX (turn)
+     * Kraken (drive + turn)
+     * MAX (drive + turn)
+     */
 
     public SwerveDrive() {
         frontLeft = new SwerveModule(Constants.Swerve.FrontLeft.DRIVE_ID, Constants.Swerve.FrontLeft.TURN_ID, Constants.Swerve.FrontLeft.ANGLE_OFFSET);
@@ -29,28 +34,9 @@ public class SwerveDrive extends SubsystemBase {
 
         gyro = new ADIS16470_IMU();
 
-        driveKinematics = new SwerveDriveKinematics(
-            new Translation2d(Constants.Swerve.LENGTH / 2, Constants.Swerve.WIDTH / 2),
-            new Translation2d(Constants.Swerve.LENGTH / 2, -Constants.Swerve.WIDTH / 2),
-            new Translation2d(-Constants.Swerve.LENGTH / 2, Constants.Swerve.WIDTH / 2),
-            new Translation2d(-Constants.Swerve.LENGTH / 2, -Constants.Swerve.WIDTH / 2)
-        );
-
         odometry = new SwerveDriveOdometry(
-            driveKinematics,
+            Constants.Swerve.driveKinematics,
             Rotation2d.fromDegrees(gyro.getAngle(IMUAxis.kZ)),
-            new SwerveModulePosition[] {
-                frontLeft.getPosition(),
-                frontRight.getPosition(),
-                rearLeft.getPosition(),
-                rearRight.getPosition()
-            });
-    }
-
-    @Override
-    public void periodic() {
-        odometry.update(
-            Rotation2d.fromDegrees(gyro.getAngle(IMUAxis.kZ)), 
             new SwerveModulePosition[] {
                 frontLeft.getPosition(),
                 frontRight.getPosition(),
@@ -76,11 +62,11 @@ public class SwerveDrive extends SubsystemBase {
     }
 
     public void drive(double xSpeed, double ySpeed, double rot, boolean fieldRelative) {
-        double xSpeedDelivered = xSpeed * Constants.Swerve.MAX_RPM;
-        double ySpeedDelivered = ySpeed * Constants.Swerve.MAX_RPM;
+        double xSpeedDelivered = xSpeed * Constants.Swerve.MAX_LINEAR_SPEED;
+        double ySpeedDelivered = ySpeed * Constants.Swerve.MAX_LINEAR_SPEED;
         double rotDelivered = rot * Constants.Swerve.MAX_ANGULAR_SPEED;
         
-        var swerveModuleStates = driveKinematics.toSwerveModuleStates(
+        var swerveModuleStates = Constants.Swerve.driveKinematics.toSwerveModuleStates(
             fieldRelative
                 ? ChassisSpeeds.fromFieldRelativeSpeeds(xSpeedDelivered, ySpeedDelivered, rotDelivered, Rotation2d.fromDegrees(gyro.getAngle(IMUAxis.kZ)))
                 : new ChassisSpeeds(xSpeedDelivered, ySpeedDelivered, rotDelivered)
@@ -100,7 +86,7 @@ public class SwerveDrive extends SubsystemBase {
     }
 
     public void setModuleStates(SwerveModuleState[] desiredStates) {
-        SwerveDriveKinematics.desaturateWheelSpeeds(desiredStates, Constants.Swerve.MAX_RPM);  
+        SwerveDriveKinematics.desaturateWheelSpeeds(desiredStates, Constants.Swerve.MAX_LINEAR_SPEED);  
 
         frontLeft.setDesiredState(desiredStates[0]);
         frontRight.setDesiredState(desiredStates[1]);
@@ -108,5 +94,15 @@ public class SwerveDrive extends SubsystemBase {
         rearRight.setDesiredState(desiredStates[3]);
     }
 
-
+    @Override
+    public void periodic() {
+        odometry.update(
+            Rotation2d.fromDegrees(gyro.getAngle(IMUAxis.kZ)), 
+            new SwerveModulePosition[] {
+                frontLeft.getPosition(),
+                frontRight.getPosition(),
+                rearLeft.getPosition(),
+                rearRight.getPosition()
+            });
+    }
 }
